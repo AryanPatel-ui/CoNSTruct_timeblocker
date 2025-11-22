@@ -1,6 +1,8 @@
 import express from "express";
-import { registerRoutes } from "../server/routes";
-import { serveStatic, log } from "../server/vite";
+
+// Do not import server modules at top-level — they may execute DB/auth code during module
+// evaluation and crash the serverless function. We'll dynamically import them inside
+// the handler so we can fail gracefully in serverless environments.
 
 // Vercel serverless handler: keep runtime-friendly JS without TypeScript-only declarations
 const app: any = express();
@@ -35,7 +37,19 @@ app.use((req: any, res: any, next: any) => {
         logLine = logLine.slice(0, 79) + "…";
       }
 
-      log(logLine);
+      // Prefer using server's log function if available; otherwise fallback to console.log
+      try {
+        // Try to require the logger if it exists
+        // eslint-disable-next-line @typescript-eslint/no-var-requires
+        const viteLogger = require("../server/vite").log;
+        if (typeof viteLogger === "function") {
+          viteLogger(logLine);
+        } else {
+          console.log(logLine);
+        }
+      } catch (e) {
+        console.log(logLine);
+      }
     }
   });
 
@@ -46,18 +60,37 @@ let initialized = false;
 
 export default async function handler(req: any, res: any) {
   if (!initialized) {
-    // registerRoutes returns an http.Server in the server implementation; we only need routes
-    // registerRoutes may expect a full Express app; call it and ignore the returned server
     try {
-      // Some imports may rely on process.env; ensure they can run in serverless environment
-      // registerRoutes sets up all /api routes on the passed app
-      // We don't await listening since serverless functions are invoked per-request
-      // Type: registerRoutes(app) -> Promise<Server>
-      // Call it and ignore the returned server
+      // Dynamically import server modules to avoid running DB/auth code at module load time
+      // This import may still throw if required env vars are missing; we catch and continue
+      // so the function can still respond to requests that don't need the full backend.
       // eslint-disable-next-line @typescript-eslint/no-var-requires
-      await registerRoutes(app);
+      const routesModule = await import("../server/routes");
+      if (routesModule && typeof routesModule.registerRoutes === "function") {
+        try {
+          // registerRoutes may return an http.Server; we ignore it
+          await routesModule.registerRoutes(app);
+        } catch (e) {
+          console.error("registerRoutes failed:", e);
+        }
+      }
+
+      // Try to import serveStatic if present
+      try {
+        // eslint-disable-next-line @typescript-eslint/no-var-requires
+        const viteModule = await import("../server/vite");
+        if (viteModule && typeof viteModule.serveStatic === "function") {
+          try {
+            viteModule.serveStatic(app);
+          } catch (e: any) {
+            console.warn("serveStatic error (ignored):", (e && e.message) || e);
+          }
+        }
+      } catch (e) {
+        // ignore
+      }
     } catch (e) {
-      console.error("Error registering routes:", e);
+      console.error("Dynamic server import failed:", e);
     }
 
     app.use((err: any, _req: any, res: any, _next: any) => {
@@ -67,14 +100,6 @@ export default async function handler(req: any, res: any) {
       res.status(status).json({ message });
       throw err;
     });
-
-    try {
-      serveStatic(app);
-    } catch (e) {
-      // serveStatic will throw if dist is not present; in serverless builds Vercel will serve static files itself
-      // so swallow this error during build/runtime
-      console.warn("serveStatic skipped:", (e as Error).message);
-    }
 
     initialized = true;
   }
