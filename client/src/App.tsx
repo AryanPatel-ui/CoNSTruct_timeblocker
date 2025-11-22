@@ -10,6 +10,7 @@ import { AppSidebar } from "@/components/app-sidebar";
 import { useAuth } from "@/hooks/useAuth";
 import NotFound from "@/pages/not-found";
 import Landing from "@/pages/landing";
+import LoginPage from "@/pages/login";
 import Home from "@/pages/home";
 import Profile from "@/pages/profile";
 import Settings from "@/pages/settings";
@@ -24,7 +25,10 @@ function Router() {
   return (
     <Switch>
       {isLoading || !isAuthenticated ? (
-        <Route path="/" component={Landing} />
+        <>
+          <Route path="/" component={Landing} />
+          <Route path="/login" component={LoginPage} />
+        </>
       ) : (
         <>
           <Route path="/" component={Home} />
