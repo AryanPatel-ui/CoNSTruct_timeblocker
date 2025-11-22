@@ -57,8 +57,19 @@ app.use((req: any, res: any, next: any) => {
 });
 
 let initialized = false;
+let routesRegistered = false;
 
 export default async function handler(req: any, res: any) {
+  // If auth routes are not registered (e.g. missing env vars), provide a clear message
+  if (req.path === "/api/login" || req.path === "/api/logout" || req.path === "/api/callback") {
+    if (!routesRegistered) {
+      res.status(503).json({
+        message:
+          "Authentication is not configured on this deployment. Set REPL_ID, DATABASE_URL and SESSION_SECRET in environment variables to enable auth, or use the /api/health endpoint to check the deployment.",
+      });
+      return;
+    }
+  }
   if (!initialized) {
     try {
       // Dynamically import server modules to avoid running DB/auth code at module load time
@@ -70,6 +81,7 @@ export default async function handler(req: any, res: any) {
         try {
           // registerRoutes may return an http.Server; we ignore it
           await routesModule.registerRoutes(app);
+          routesRegistered = true;
         } catch (e) {
           console.error("registerRoutes failed:", e);
         }
