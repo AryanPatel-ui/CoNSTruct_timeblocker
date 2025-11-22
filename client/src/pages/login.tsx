@@ -1,16 +1,16 @@
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
-import { useNavigate } from "wouter";
+import { useLocation } from "wouter";
 import { useEffect } from "react";
 import { useAuth } from "@/hooks/useAuth";
 
 export default function LoginPage() {
-  const navigate = useNavigate();
+  const [, setLocation] = useLocation();
   const { setDemoUser, isLoading, isAuthenticated } = useAuth() as any;
 
   useEffect(() => {
-    if (isAuthenticated) navigate('/');
-  }, [isAuthenticated, navigate]);
+    if (isAuthenticated) setLocation('/');
+  }, [isAuthenticated, setLocation]);
 
   const startDemo = () => {
     const demo = {
@@ -20,7 +20,7 @@ export default function LoginPage() {
       lastName: "User",
     };
     setDemoUser(demo);
-    navigate('/');
+    setLocation('/');
   };
 
   return (
