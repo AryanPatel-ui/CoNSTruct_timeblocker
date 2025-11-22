@@ -102,15 +102,17 @@ export async function setupAuth(app: Express) {
   const registeredStrategies = new Set<string>();
 
   // Helper function to ensure strategy exists for a domain
-  const ensureStrategy = (domain: string) => {
-    const strategyName = `replitauth:${domain}`;
+  const ensureStrategy = (domain?: string) => {
+    // req.hostname can be undefined in some environments; fall back to a safe placeholder
+    const host = domain || "localhost";
+    const strategyName = `replitauth:${host}`;
     if (!registeredStrategies.has(strategyName)) {
       const strategy = new Strategy(
         {
           name: strategyName,
           config,
           scope: "openid email profile offline_access",
-          callbackURL: `https://${domain}/api/callback`,
+          callbackURL: `https://${host}/api/callback`,
         },
         verify,
       );
